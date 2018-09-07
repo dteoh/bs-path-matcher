@@ -1,12 +1,14 @@
 module Argument = {
   type t =
-    | Int(string, int);
+    | Int(string, int)
+    | String(string, string);
 };
 
 module Segment = {
   type t =
     | Static(string)
-    | Int(string);
+    | Int(string)
+    | String(string);
   module PrefixMatcher = {
     let tryStatic = (prefix, path) =>
       if (Js.String.startsWith(prefix, path)) {
@@ -24,6 +26,13 @@ module Segment = {
       | Some(_)
       | None => None
       };
+    let tryString = path =>
+      switch (Js.String.match([%re "/^([^/\\n\\r]+)/"], path)) {
+      | Some([|_, ss|]) =>
+        Some((ss, Js.String.substr(~from=Js.String.length(ss), path)))
+      | Some(_)
+      | None => None
+      };
   };
   let extractIntDefinitions = str =>
     switch (Js.String.match([%re "/{\\w+:int}/g"], str)) {
@@ -33,19 +42,44 @@ module Segment = {
       |. Belt.List.fromArray
     | None => []
     };
-  let extractDynamics = str =>
-    str |. extractIntDefinitions |. Belt.List.map(((match, _)) => match);
+  let extractStringDefinitions = str =>
+    switch (Js.String.match([%re "/{\\w+:str}/g"], str)) {
+    | Some(matches) =>
+      matches
+      |. Belt.Array.map(match => (match, Js.String.indexOf(match, str)))
+      |. Belt.List.fromArray
+    | None => []
+    };
+  let extractDynamics = str => {
+    let intDefs = extractIntDefinitions(str);
+    let strDefs = extractStringDefinitions(str);
+    intDefs
+    |. Belt.List.concat(strDefs)
+    |. Belt.List.sort((d1, d2) => {
+         let (_, p1) = d1;
+         let (_, p2) = d2;
+         p1 - p2;
+       })
+    |. Belt.List.map(((def, _)) => def);
+  };
   let makeInt = str =>
     switch (Js.String.match([%re "/{(\\w+):int}/"], str)) {
     | Some([|_, name|]) => Some(Int(name))
     | Some(_)
     | None => None
     };
-  let make = str =>
-    switch (makeInt(str)) {
-    | Some(s) => s
-    | None => Static(str)
+  let makeString = str =>
+    switch (Js.String.match([%re "/{(\\w+):str}/"], str)) {
+    | Some([|_, name|]) => Some(String(name))
+    | Some(_)
+    | None => None
     };
+  let make = str =>
+    str
+    |. makeInt
+    |. Utils.Option.else_(() => makeString(str))
+    |. Utils.Option.else_(() => Some(Static(str)))
+    |. Belt.Option.getExn;
   let tryMatch: (t, string) => option((string, list(Argument.t))) =
     (segment, path) =>
       switch (segment) {
@@ -58,6 +92,11 @@ module Segment = {
         switch (PrefixMatcher.tryInt(path)) {
         | Some((integer, rest)) =>
           Some((rest, [Argument.Int(name, integer)]))
+        | None => None
+        }
+      | String(name) =>
+        switch (PrefixMatcher.tryString(path)) {
+        | Some((str, rest)) => Some((rest, [Argument.String(name, str)]))
         | None => None
         }
       };

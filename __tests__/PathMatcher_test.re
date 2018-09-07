@@ -13,10 +13,22 @@ describe("Matcher", () => {
     test("can create matcher for paths with int placeholders", () =>
       expect(M.make("/{x:int}")) |> toEqual(S.[Static("/"), Int("x")])
     );
-    test("can create matcher for paths with static and int placeholders", () =>
-      expect(M.make("/foo/{x:int}/bar/{y:int}"))
+    test("can create matcher for paths with string placeholders", () =>
+      expect(M.make("/{x:str}")) |> toEqual(S.[Static("/"), String("x")])
+    );
+    test(
+      "can create matcher for paths with static, int, and string placeholders",
+      () =>
+      expect(M.make("/foo/{x:int}/{bar:str}/{y:int}"))
       |> toEqual(
-           S.[Static("/foo/"), Int("x"), Static("/bar/"), Int("y")],
+           S.[
+             Static("/foo/"),
+             Int("x"),
+             Static("/"),
+             String("bar"),
+             Static("/"),
+             Int("y"),
+           ],
          )
     );
   });
@@ -29,10 +41,16 @@ describe("Matcher", () => {
       let matcher = M.make("/foo/bar");
       expect(matcher |. M.tryMatch("/foo/bar")) |> toEqual(Some([]));
     });
-    test("can match paths with static and int placeholders", () => {
-      let matcher = M.make("/foo/{x:int}/bar/{y:int}");
+    test("can match paths with static, int, and string placeholders", () => {
+      let matcher = M.make("/foo/{x:int}/{lol:str}/{y:int}");
       expect(matcher |. M.tryMatch("/foo/123/bar/456"))
-      |> toEqual(Some([A.Int("x", 123), A.Int("y", 456)]));
+      |> toEqual(
+           Some([
+             A.Int("x", 123),
+             A.String("lol", "bar"),
+             A.Int("y", 456),
+           ]),
+         );
     });
     test("returns None if only partial match", () => {
       let matcher = M.make("/foo/{x:int}/baz");
@@ -54,13 +72,24 @@ describe("Segment", () => {
     test("can make int matcher", () =>
       expect(S.makeInt("{xyz:int}")) |> toEqual(Some(S.Int("xyz")))
     );
-    test("will not make int matcher if it is not specified as such", () =>
+    test("will not make int matcher when not specified as such", () =>
       expect(S.makeInt("{xyz:str}")) |> toBe(None)
+    );
+  });
+  describe("makeString", () => {
+    test("can make string matcher", () =>
+      expect(S.makeString("{xyz:str}")) |> toEqual(Some(S.String("xyz")))
+    );
+    test("will not make string matcher when not specified as such", () =>
+      expect(S.makeString("{xyz:int}")) |> toBe(None)
     );
   });
   describe("make", () => {
     test("can make int matcher", () =>
       expect(S.make("{xyz:int}")) |> toEqual(S.Int("xyz"))
+    );
+    test("can make string matcher", () =>
+      expect(S.make("{abc:str}")) |> toEqual(S.String("abc"))
     );
     test("will default to static matcher", () =>
       expect(S.make("{xyz:wtf}")) |> toEqual(S.Static("{xyz:wtf}"))
@@ -80,6 +109,13 @@ describe("Segment", () => {
     );
     test("will not match non-matching integer prefix", () =>
       expect(S.tryMatch(Int("something"), "b123/bar")) |> toBe(None)
+    );
+    test("can match prefix characters before /", () =>
+      expect(S.tryMatch(String("foo"), "abc-123-def-456/ghi/jkl"))
+      |> toEqual(Some(("/ghi/jkl", [A.String("foo", "abc-123-def-456")])))
+    );
+    test("will not match empty prefix", () =>
+      expect(S.tryMatch(String("foo"), "/ghi/jkl")) |> toBe(None)
     );
   });
 });
