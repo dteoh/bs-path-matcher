@@ -16,10 +16,18 @@ describe("Matcher", () => {
     test("can create matcher for paths with string placeholders", () =>
       expect(M.make("/{x:str}")) |> toEqual(S.[Static("/"), String("x")])
     );
+    test("can create matcher for paths with trailing static segments", () =>
+      expect(M.make("/{x:int}/foo"))
+      |> toEqual(S.[Static("/"), Int("x"), Static("/foo")])
+    );
+    test("can create matcher for paths with regex placeholders", () =>
+      expect(M.make("/{x:re(\\d+)}"))
+      |> toEqual(S.[Static("/"), Regex("x", [%re "/^\\d+/"])])
+    );
     test(
-      "can create matcher for paths with static, int, and string placeholders",
+      "can create matcher for paths with static, int, string and regex placeholders",
       () =>
-      expect(M.make("/foo/{x:int}/{bar:str}/{y:int}"))
+      expect(M.make("/foo/{x:int}/{bar:str}/{y:int}/zoo/bee/{doo:re(\\d+)}"))
       |> toEqual(
            S.[
              Static("/foo/"),
@@ -28,6 +36,8 @@ describe("Matcher", () => {
              String("bar"),
              Static("/"),
              Int("y"),
+             Static("/zoo/bee/"),
+             Regex("doo", [%re "/^\\d+/"]),
            ],
          )
     );
@@ -41,14 +51,16 @@ describe("Matcher", () => {
       let matcher = M.make("/foo/bar");
       expect(matcher |. M.tryMatch("/foo/bar")) |> toEqual(Some([]));
     });
-    test("can match paths with static, int, and string placeholders", () => {
-      let matcher = M.make("/foo/{x:int}/{lol:str}/{y:int}");
-      expect(matcher |. M.tryMatch("/foo/123/bar/456"))
+    test("can match paths with static, int, string and regex placeholders", () => {
+      let matcher =
+        M.make("/foo/{x:int}/{lol:str}/{y:int}/zzz/{z:re(\\d+)}/fff");
+      expect(matcher |. M.tryMatch("/foo/123/bar/456/zzz/9098/fff"))
       |> toEqual(
            Some([
              A.Int("x", 123),
              A.String("lol", "bar"),
              A.Int("y", 456),
+             A.String("z", "9098"),
            ]),
          );
     });
@@ -64,8 +76,12 @@ describe("Segment", () => {
   module S = PathMatcher.Segment;
   describe("extractDynamics", () =>
     test("returns list of valid dynamic segment definitions", () =>
-      expect(S.extractDynamics("/bar/{x:int}/foo/zoo/{y:bbb}/{z:int}"))
-      |> toEqual(["{x:int}", "{z:int}"])
+      expect(
+        S.extractDynamics(
+          "/bar/{x:int}/foo/zoo/{y:bbb}/{z:int}/lolo/{a:re(\\d+)}",
+        ),
+      )
+      |> toEqual(["{x:int}", "{z:int}", "{a:re(\\d+)}"])
     )
   );
   describe("makeInt", () => {
@@ -84,12 +100,25 @@ describe("Segment", () => {
       expect(S.makeString("{xyz:int}")) |> toBe(None)
     );
   });
+  describe("makeRegex", () => {
+    test("can make regex matcher", () =>
+      expect(S.makeRegex("{def:re(\\d+)}"))
+      |> toEqual(Some(S.Regex("def", Js_re.fromString("^\\d+"))))
+    );
+    test("will not make regex matcher when not specified as such", () =>
+      expect(S.makeRegex("{xyz:int}")) |> toBe(None)
+    );
+  });
   describe("make", () => {
     test("can make int matcher", () =>
       expect(S.make("{xyz:int}")) |> toEqual(S.Int("xyz"))
     );
     test("can make string matcher", () =>
       expect(S.make("{abc:str}")) |> toEqual(S.String("abc"))
+    );
+    test("can make regex matcher", () =>
+      expect(S.make("{abc:re(\\d+)}"))
+      |> toEqual(S.Regex("abc", Js_re.fromString("^\\d+")))
     );
     test("will default to static matcher", () =>
       expect(S.make("{xyz:wtf}")) |> toEqual(S.Static("{xyz:wtf}"))
@@ -116,6 +145,10 @@ describe("Segment", () => {
     );
     test("will not match empty prefix", () =>
       expect(S.tryMatch(String("foo"), "/ghi/jkl")) |> toBe(None)
+    );
+    test("can match regex prefix", () =>
+      expect(S.tryMatch(Regex("foo", [%re "/\\d+/"]), "123/bar"))
+      |> toEqual(Some(("/bar", [A.String("foo", "123")])))
     );
   });
 });

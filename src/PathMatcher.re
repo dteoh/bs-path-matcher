@@ -8,7 +8,8 @@ module Segment = {
   type t =
     | Static(string)
     | Int(string)
-    | String(string);
+    | String(string)
+    | Regex(string, Js_re.t);
   module PrefixMatcher = {
     let tryStatic = (prefix, path) =>
       if (Js.String.startsWith(prefix, path)) {
@@ -33,6 +34,15 @@ module Segment = {
       | Some(_)
       | None => None
       };
+    let tryRegex = (re, path) =>
+      switch (Js.String.match(re, path)) {
+      | Some(matches) =>
+        Some((
+          matches[0],
+          Js.String.substr(~from=Js.String.length(matches[0]), path),
+        ))
+      | None => None
+      };
   };
   let extractIntDefinitions = str =>
     switch (Js.String.match([%re "/{\\w+:int}/g"], str)) {
@@ -50,11 +60,21 @@ module Segment = {
       |. Belt.List.fromArray
     | None => []
     };
+  let extractRegexDefinitions = str =>
+    switch (Js.String.match([%re "/{\\w+:re\\(.+\\)}/g"], str)) {
+    | Some(matches) =>
+      matches
+      |. Belt.Array.map(match => (match, Js.String.indexOf(match, str)))
+      |. Belt.List.fromArray
+    | None => []
+    };
   let extractDynamics = str => {
     let intDefs = extractIntDefinitions(str);
     let strDefs = extractStringDefinitions(str);
+    let regexDefs = extractRegexDefinitions(str);
     intDefs
     |. Belt.List.concat(strDefs)
+    |. Belt.List.concat(regexDefs)
     |. Belt.List.sort((d1, d2) => {
          let (_, p1) = d1;
          let (_, p2) = d2;
@@ -74,10 +94,18 @@ module Segment = {
     | Some(_)
     | None => None
     };
+  let makeRegex = str =>
+    switch (Js.String.match([%re "/{(\\w+):re\\((.+)\\)}/"], str)) {
+    | Some([|_, name, re|]) =>
+      Some(Regex(name, Js_re.fromString("^" ++ re)))
+    | Some(_)
+    | None => None
+    };
   let make = str =>
     str
     |. makeInt
     |. Utils.Option.else_(() => makeString(str))
+    |. Utils.Option.else_(() => makeRegex(str))
     |. Utils.Option.else_(() => Some(Static(str)))
     |. Belt.Option.getExn;
   let tryMatch: (t, string) => option((string, list(Argument.t))) =
@@ -96,6 +124,11 @@ module Segment = {
         }
       | String(name) =>
         switch (PrefixMatcher.tryString(path)) {
+        | Some((str, rest)) => Some((rest, [Argument.String(name, str)]))
+        | None => None
+        }
+      | Regex(name, re) =>
+        switch (PrefixMatcher.tryRegex(re, path)) {
         | Some((str, rest)) => Some((rest, [Argument.String(name, str)]))
         | None => None
         }
@@ -132,7 +165,12 @@ module Matcher = {
   let rec transform: (string, list(string), t) => t =
     (path, dynamicSegments, segments) =>
       switch (dynamicSegments) {
-      | [] => segments
+      | [] =>
+        if (path == "") {
+          segments;
+        } else {
+          Belt.List.concat(segments, [Static(path)]);
+        }
       | [dynamic, ...rest] =>
         switch (transformDynamic(path, dynamic)) {
         | (parsed, Some(path)) =>
@@ -141,11 +179,7 @@ module Matcher = {
         }
       };
   let make: string => t =
-    str =>
-      switch (Segment.extractDynamics(str)) {
-      | [] => [Static(str)]
-      | _ as definitions => transform(str, definitions, [])
-      };
+    str => transform(str, Segment.extractDynamics(str), []);
   let tryMatch: (t, string) => option(list(Argument.t)) =
     (matchSpec, path) => {
       let rec matcher = (specs, path, args) =>
