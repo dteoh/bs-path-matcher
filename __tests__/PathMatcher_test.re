@@ -23,6 +23,12 @@ describe("Matcher", () => {
 
 describe("Matcher.Segment", () => {
   module S = PathMatcher.Matcher.Segment;
+  describe("extractDynamics", () =>
+    test("returns list of valid dynamic segment definitions", () =>
+      expect(S.extractDynamics("/bar/{x:int}/foo/zoo/{y:bbb}/{z:int}"))
+      |> toEqual(["{x:int}", "{z:int}"])
+    )
+  );
   describe("makeInt", () => {
     test("can make int matcher", () =>
       expect(S.makeInt("{xyz:int}")) |> toEqual(Some(S.Int("xyz")))

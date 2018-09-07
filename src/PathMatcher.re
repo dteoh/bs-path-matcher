@@ -3,6 +3,16 @@ module Matcher = {
     type t =
       | Static(string)
       | Int(string);
+    let extractIntDefinitions = str =>
+      switch (Js.String.match([%re "/{\\w+:int}/g"], str)) {
+      | Some(matches) =>
+        matches
+        |. Belt.Array.map(match => (match, Js.String.indexOf(match, str)))
+        |. Belt.List.fromArray
+      | None => []
+      };
+    let extractDynamics = str =>
+      str |. extractIntDefinitions |. Belt.List.map(((match, _)) => match);
     let makeInt = str =>
       switch (Js.String.match([%re "/{(\\w+):int}/"], str)) {
       | Some([|_, name|]) => Some(Int(name))
@@ -55,9 +65,8 @@ module Matcher = {
       };
   let make: string => list(Segment.t) =
     str =>
-      switch (Js.String.match([%re "/{\\w+:int}/g"], str)) {
-      | Some(dynamicParts) =>
-        transform(str, Belt.List.fromArray(dynamicParts), [])
-      | None => [Static(str)]
+      switch (Segment.extractDynamics(str)) {
+      | [] => [Static(str)]
+      | _ as definitions => transform(str, definitions, [])
       };
 };
