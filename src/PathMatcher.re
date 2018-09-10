@@ -104,9 +104,9 @@ module Segment = {
   let make = str =>
     str
     |. makeInt
-    |. Utils.Option.else_(() => makeString(str))
-    |. Utils.Option.else_(() => makeRegex(str))
-    |. Utils.Option.else_(() => Some(Static(str)))
+    |. PM_Utils.Option.else_(() => makeString(str))
+    |. PM_Utils.Option.else_(() => makeRegex(str))
+    |. PM_Utils.Option.else_(() => Some(Static(str)))
     |. Belt.Option.getExn;
   let tryMatch: (t, string) => option((string, list(Argument.t))) =
     (segment, path) =>

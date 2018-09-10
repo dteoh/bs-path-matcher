@@ -3,7 +3,7 @@ open Jest;
 open Expect;
 
 describe("Option", () => {
-  module O = Utils.Option;
+  module O = PM_Utils.Option;
   describe("else_", () => {
     test("will return the first argument when Some", () =>
       expect(O.else_(Some(123), () => Some(456))) |> toEqual(Some(123))
