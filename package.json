@@ -1,5 +1,5 @@
 {
-  "name": "bs-path-matcher",
+  "name": "@dteoh/bs-path-matcher",
   "version": "0.1.0",
   "scripts": {
     "build": "bsb -make-world",
@@ -10,10 +10,10 @@
   "keywords": [
     "BuckleScript"
   ],
-  "author": "",
-  "license": "MIT",
+  "author": "dteoh",
+  "license": "LGPL-3.0-or-later",
   "devDependencies": {
     "@glennsl/bs-jest": "^0.4.3",
-    "bs-platform": "^4.0.0"
+    "bs-platform": "^4.0.5"
   }
 }
